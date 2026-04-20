@@ -1,0 +1,1236 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>趣味长方体包装盒拼接 - 马卡龙玻璃风</title>
+    
+    <!-- 单个文件形式调用CDN，放置于标题下方 -->
+    <script src="https:jiaohukejian.com/math/daohang/ku/tailwindcss.js"></script>
+    <!-- 将失效的 elemecdn 替换为稳定且国内流畅的 jsdelivr NPM 镜像 -->
+    <script src="https:jiaohukejian.com/math/daohang/ku/three.min.js"></script>
+    <script src="https:jiaohukejian.com/math/daohang/ku/OrbitControls.js"></script>
+
+
+    <style>
+        /* 全局马卡龙渐变背景 */
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: linear-gradient(135deg, #FFF0F5 0%, #E0F7FA 100%);
+            font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            width: 100%;
+            overflow: hidden;
+            touch-action: none; /* 仅在画布区域禁用浏览器默认手势，保证触控拖拽流畅 */
+        }
+        
+        /* 底部控制区：防沉没设计 (离底3px) */
+        #control-container {
+            flex: none;
+            height: 22vh; 
+            min-height: 140px;
+            margin: 10px 16px 3px 16px; 
+            background: rgba(255, 255, 255, 0.45);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            border-radius: 24px;
+            box-shadow: 0 12px 32px rgba(181, 192, 211, 0.2), inset 0 0 0 1px rgba(255,255,255,0.4);
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
+            align-items: stretch;
+            padding: 1rem 2rem;
+            gap: 2rem;
+            z-index: 10;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch; /* 增强移动端横向滚动体验 */
+        }
+
+        #control-container::-webkit-scrollbar { height: 0px; }
+
+        .macaron-card {
+            flex: 1;
+            min-width: 300px; /* 移动端适配：保证最小宽度，超出则横向滚动 */
+            max-width: 500px;
+            flex-shrink: 0; /* 防止被过度挤压变形 */
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            padding: 1rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 2px 4px rgba(255,255,255,0.8), 0 4px 12px rgba(0, 0, 0, 0.03);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .macaron-card:hover {
+            box-shadow: inset 0 2px 4px rgba(255,255,255,0.9), 0 8px 24px rgba(0, 0, 0, 0.05);
+        }
+
+        .card-title {
+            font-size: 0.95rem;
+            font-weight: 800;
+            color: #7A899E;
+            margin-bottom: 0.75rem;
+            letter-spacing: 0.05em;
+            text-shadow: 0 1px 1px #fff;
+        }
+
+        .macaron-btn {
+            background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(255,255,255,0.5));
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            border-radius: 14px;
+            padding: 0.4rem 1.25rem;
+            color: #5C677D;
+            font-weight: 700;
+            font-size: 0.85rem;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.04), inset 0 2px 5px rgba(255,255,255,0.8);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.3rem;
+        }
+        .macaron-btn:hover {
+            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 6px 14px rgba(0,0,0,0.06), inset 0 2px 5px rgba(255,255,255,0.9);
+        }
+        .macaron-btn:active { transform: translateY(1px); }
+
+        .btn-blue { background: linear-gradient(135deg, #e4efff, #c7ceea); border-color: #e4efff; color: #4a547a; }
+        .btn-blue:hover { background: linear-gradient(135deg, #f0f5ff, #d4dbf5); }
+        .btn-pink { background: linear-gradient(135deg, #ffe5e3, #ffb7b2); border-color: #ffe5e3; color: #7a4340; }
+        .btn-pink:hover { background: linear-gradient(135deg, #fff0ef, #ffc5c0); }
+        
+        .btn-action { background: #fff; color: #7A899E; border: 1px solid #E2EBF0; }
+        .btn-action:hover { background: #F8FAFC; color: #4a547a; }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            margin-top: -7px;
+            background: #ffffff; 
+            border: 4px solid #FFDAC1; 
+            border-radius: 50%;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: transform 0.15s;
+        }
+        input[type=range]::-webkit-slider-thumb:active { transform: scale(1.2); }
+        input[type=range]::-webkit-slider-runnable-track {
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(0,0,0,0.05);
+            border-radius: 6px;
+            height: 6px;
+            cursor: pointer;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.55);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.8);
+            box-shadow: 0 8px 24px rgba(181, 192, 211, 0.15);
+            cursor: pointer;
+            border-radius: 16px;
+        }
+
+        .tool-btn { transition: all 0.2s; border: 2px solid transparent; }
+        .tool-btn.active { border-color: #7A899E; transform: scale(1.15); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+
+    <!-- 3D 渲染区域与 2D 批注层 -->
+    <div id="canvas-container">
+        
+        <!-- 左侧下拉的批注工具栏 (按钮正下方、2列竖排) -->
+        <div class="absolute left-6 top-6 z-30 flex flex-col items-center">
+            <button id="toggle-draw-btn" class="glass-panel w-12 h-12 rounded-full text-2xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 z-40 text-slate-600 shadow-lg" title="打开/关闭批注">🖌️</button>
+            
+            <div id="anno-tools-panel" class="glass-panel mt-3 p-3 transition-all duration-300 hidden opacity-0 -translate-y-4 z-30">
+                <!-- 内部使用 2列 的 Grid 布局 -->
+                <div class="grid grid-cols-2 gap-3 items-center justify-items-center">
+                    <!-- 颜色 -->
+                    <button class="tool-btn active w-7 h-7 rounded-full shadow-inner" style="background-color: #FF0000" data-color="#FF0000"></button>
+                    <button class="tool-btn w-7 h-7 rounded-full shadow-inner" style="background-color: #FF8800" data-color="#FF8800"></button>
+                    <button class="tool-btn w-7 h-7 rounded-full shadow-inner" style="background-color: #FFDD00" data-color="#FFDD00"></button>
+                    <button class="tool-btn w-7 h-7 rounded-full shadow-inner" style="background-color: #00DD00" data-color="#00DD00"></button>
+                    <button class="tool-btn w-7 h-7 rounded-full shadow-inner" style="background-color: #0088FF" data-color="#0088FF"></button>
+                    <button class="tool-btn w-7 h-7 rounded-full shadow-inner" style="background-color: #AA00FF" data-color="#AA00FF"></button>
+                    
+                    <div class="col-span-2 w-full border-t border-white/80 my-1"></div>
+                    
+                    <!-- 粗细与橡皮擦 -->
+                    <button class="width-btn w-7 h-7 rounded flex justify-center items-center hover:bg-white/50 transition-colors" data-width="2">
+                        <div class="bg-slate-500 rounded-full w-[4px] h-[4px]"></div>
+                    </button>
+                    <button class="width-btn active w-7 h-7 rounded bg-white/60 shadow-sm flex justify-center items-center hover:bg-white/80 transition-colors" data-width="5">
+                        <div class="bg-slate-600 rounded-full w-[7px] h-[7px]"></div>
+                    </button>
+                    <button class="width-btn w-7 h-7 rounded flex justify-center items-center hover:bg-white/50 transition-colors" data-width="10">
+                        <div class="bg-slate-700 rounded-full w-[12px] h-[12px]"></div>
+                    </button>
+                    <button id="eraser-btn" class="w-8 h-8 rounded-full bg-white/50 hover:bg-white/80 flex items-center justify-center text-lg transition-all border-2 border-transparent" title="橡皮擦">🧽</button>
+
+                    <div class="col-span-2 w-full border-t border-white/80 my-1"></div>
+
+                    <!-- 操作 -->
+                    <button id="undo-draw-btn" class="w-8 h-8 rounded-full bg-white/50 hover:bg-white/80 flex items-center justify-center text-md transition-all" title="撤销">↩️</button>
+                    <button id="clear-draw-btn" class="w-8 h-8 rounded-full bg-white/50 hover:bg-white/80 flex items-center justify-center text-md transition-all text-red-400" title="清空">🗑️</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 悬浮视角缩放控制 -->
+        <div id="zoom-control" class="absolute bottom-4 right-4 z-30 glass-panel p-2 px-4 flex flex-col items-center gap-2 transition-transform hover:scale-105">
+            <span class="text-xs font-black text-slate-500 tracking-wider">🔍 缩放</span>
+            <input type="range" id="zoom-slider" min="0.2" max="2.4" step="0.1" value="1" class="w-20 md:w-24">
+        </div>
+
+        <!-- 右侧数据面板 -->
+        <div id="data-panel" class="absolute bottom-24 right-4 z-30 flex flex-col gap-2 scale-[0.85] origin-bottom-right">
+            <button id="btn-total" class="glass-panel p-2 px-4 font-medium text-slate-500 transition-all flex justify-center items-center w-36 hover:bg-white/60">
+                <span class="text-sm font-bold tracking-widest text-shadow-sm">👁️ 总表面积</span>
+            </button>
+            <button id="btn-overlap" class="glass-panel p-2 px-4 font-medium text-slate-500 transition-all flex justify-center items-center w-36 hover:bg-white/60">
+                <span class="text-sm font-bold tracking-widest text-shadow-sm">👁️ 重合面积</span>
+            </button>
+            <button id="btn-dimensions" class="glass-panel p-2 px-4 font-medium text-slate-500 transition-all flex justify-center items-center w-36 hover:bg-white/60 mt-2">
+                <span class="text-sm font-bold tracking-widest text-shadow-sm">📏 尺寸标记</span>
+            </button>
+        </div>
+
+        <!-- 3D位置追踪标签容器 -->
+        <div id="labels-container" class="absolute top-0 left-0 w-full h-full pointer-events-none z-10"></div>
+        <div id="dim-labels-container" class="absolute top-0 left-0 w-full h-full pointer-events-none z-10"></div>
+
+        <canvas id="annotation-canvas" class="absolute top-0 left-0 w-full h-full pointer-events-none z-20"></canvas>
+    </div>
+
+    <!-- 底部控制区 -->
+    <div id="control-container">
+        
+        <!-- 板块 1：包装盒操作 -->
+        <div class="macaron-card">
+            <h2 class="card-title">📦 包装盒操作</h2>
+            <div class="flex gap-3 mb-3">
+                <button id="add-btn" class="macaron-btn btn-blue text-sm shadow-sm">✨ 添加</button>
+                <button id="delete-btn" class="macaron-btn btn-pink text-sm shadow-sm">🗑️ 删除</button>
+                <button id="clear-btn" class="macaron-btn text-sm shadow-sm">🧹 清空</button>
+            </div>
+            
+            <div class="flex items-center gap-3 bg-white/40 p-1.5 px-3 rounded-2xl border border-white/60 shadow-inner w-full justify-between">
+                <!-- 替换为独立的左右转/前后转按钮 -->
+                <div class="flex gap-2">
+                    <button id="rotate-y-btn" class="macaron-btn btn-action px-2 py-1 text-xs">↻ 左右转</button>
+                    <button id="rotate-x-btn" class="macaron-btn btn-action px-2 py-1 text-xs">↺ 前后转</button>
+                </div>
+                
+                <!-- 组合重合开关 -->
+                <div class="flex items-center gap-2 border-l border-white/60 pl-3">
+                    <span class="text-[12px] font-black text-[#7A899E] whitespace-nowrap">组合拖动</span>
+                    <label for="group-toggle" class="flex items-center cursor-pointer">
+                        <div class="relative">
+                            <input type="checkbox" id="group-toggle" class="sr-only peer" checked>
+                            <div class="block bg-white/60 border border-white/80 w-9 h-5 rounded-full transition-colors duration-300 peer-checked:bg-[#B5EAD7] shadow-inner"></div>
+                            <div class="dot absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-300 peer-checked:translate-x-4 shadow-md"></div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- 板块 2：参数与透明度控制 (2行2列 Grid布局) -->
+        <div class="macaron-card">
+            <h2 class="card-title">⚙️ 尺寸与透明度</h2>
+            <div class="w-full grid grid-cols-2 gap-x-6 gap-y-3 text-sm font-black text-[#7A899E] px-2">
+                <div class="flex items-center gap-2">
+                    <span class="w-4">长</span>
+                    <input type="range" id="size-l" min="5" max="40" step="1" value="20" class="flex-1">
+                    <span id="val-l" class="w-6 text-right">20</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-4">宽</span>
+                    <input type="range" id="size-w" min="5" max="40" step="1" value="15" class="flex-1">
+                    <span id="val-w" class="w-6 text-right">15</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-4">高</span>
+                    <input type="range" id="size-h" min="2" max="20" step="1" value="5" class="flex-1">
+                    <span id="val-h" class="w-6 text-right">5</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-4 text-[#B5EAD7]">透</span>
+                    <input type="range" id="opacity-slider" min="0" max="100" step="1" value="100" class="flex-1">
+                    <span id="val-o" class="w-8 text-right text-[#93C9B5]">100%</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 核心交互逻辑 -->
+    <script>
+        // 不再使用 module import，全部改用已引入的全局 THREE 变量
+        // --- 1. 基础场景设置 ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        // 增加场景雾化，消除地面边界感
+        scene.fog = new THREE.FogExp2(0xE0F7FA, 0.0035);
+
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 1000);
+        camera.position.set(40, 45, 60);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = false;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.outputEncoding = THREE.sRGBEncoding; // r128 API
+        container.appendChild(renderer.domElement);
+
+        // --- 2. 灯光设置 ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.9); // 从 1.8 调暗 50%
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.75); // 从 1.5 调暗 50%
+        dirLight.position.set(50, 80, 50);
+        dirLight.castShadow = false;
+        scene.add(dirLight);
+
+        const backLight = new THREE.DirectionalLight(0xffffff, 0.4); // 从 0.8 调暗 50%
+        backLight.position.set(-50, 30, -50);
+        scene.add(backLight);
+
+        // --- 3. 浅色半透明马卡龙地板生成 ---
+        const planeGeometry = new THREE.PlaneGeometry(2000, 2000);
+        function createCheckerTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 512;
+            const context = canvas.getContext('2d');
+            context.fillStyle = '#ffffff';
+            context.fillRect(0, 0, 512, 512);
+            context.fillStyle = '#999999';
+            context.fillRect(0, 0, 256, 256);
+            context.fillRect(256, 256, 256, 256);
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(100, 100);
+            texture.encoding = THREE.sRGBEncoding;
+            return texture;
+        }
+        const planeMaterial = new THREE.MeshStandardMaterial({ 
+            map: createCheckerTexture(),
+            roughness: 0.6, 
+            metalness: 0.1,
+            transparent: true,
+            opacity: 0.4 
+        }); 
+        const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        plane.rotation.x = -Math.PI / 2;
+        plane.position.y = -0.02; 
+        plane.receiveShadow = true;
+        scene.add(plane);
+
+        // --- 4. 生成贴图与材质 ---
+        function createCandyTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#6e373a'; ctx.fillRect(0, 0, 512, 512);
+            ctx.fillStyle = '#61191d'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(280, 0); ctx.lineTo(0, 280); ctx.fill();
+            ctx.fillStyle = '#787373'; ctx.beginPath(); ctx.moveTo(120, 0); ctx.lineTo(320, 0); ctx.lineTo(0, 320); ctx.lineTo(0, 120); ctx.fill();
+
+            const drawCandy = (x, y, scale, rot, isRound, colorMain, colorSub) => {
+                ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(scale, scale);
+                if (isRound) {
+                    ctx.fillStyle = colorMain || '#805900'; ctx.beginPath(); ctx.arc(0, 0, 15, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = colorSub || '#271a17'; ctx.fillRect(-2, 15, 4, 20);
+                } else {
+                    ctx.fillStyle = colorMain || '#005c2f'; ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = colorSub || '#005021'; ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(-25, -15); ctx.lineTo(-25, 15); ctx.fill();
+                    ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(25, -15); ctx.lineTo(25, 15); ctx.fill();
+                }
+                ctx.restore();
+            };
+
+            drawCandy(350, 150, 1, 0.5, true, '#805900', '#271a17'); 
+            drawCandy(200, 250, 0.8, -0.2, false, '#013b5e', '#002130'); 
+            drawCandy(400, 250, 0.9, 0.8, false, '#3d0f51', '#250a46'); 
+            drawCandy(300, 350, 1.2, -0.5, false, '#173e19', '#0d2f10'); 
+            drawCandy(150, 320, 0.7, 0.1, false, '#732800', '#5f1b06'); 
+
+            // 覆盖一层 50% 透明度的白色，使整体贴图颜色调浅 50%
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.fillRect(0, 0, 512, 512);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.encoding = THREE.sRGBEncoding; // r128 API
+            return texture;
+        }
+
+        const boxTexture = createCandyTexture();
+        const boxMaterial = new THREE.MeshStandardMaterial({ map: boxTexture, roughness: 0.3, metalness: 0.1, transparent: true, opacity: 1, side: THREE.DoubleSide });
+        const frontBackMaterial = new THREE.MeshStandardMaterial({ color: '#791f25', roughness: 0.4, transparent: true, opacity: 1, side: THREE.DoubleSide }); 
+        const rightLeftMaterial = new THREE.MeshStandardMaterial({ color: '#4d2225', roughness: 0.4, transparent: true, opacity: 1, side: THREE.DoubleSide }); 
+        const bottomMaterial = new THREE.MeshStandardMaterial({ color: '#3d1a1d', roughness: 0.4, transparent: true, opacity: 1, side: THREE.DoubleSide });    
+        const materials = [ rightLeftMaterial, rightLeftMaterial, boxMaterial, bottomMaterial, frontBackMaterial, frontBackMaterial ];
+
+        // --- 5. 核心逻辑变量与交互控件 ---
+        const objects = []; 
+        let currentGeom = new THREE.BoxGeometry(20, 5, 15); 
+        let boxCount = 0;
+
+        let isDragging = false;
+        let isGroupMode = true;
+        const groupContainer = new THREE.Group(); 
+        scene.add(groupContainer);
+
+        const dragPlane = new THREE.Plane();
+        const planeNormal = new THREE.Vector3();
+        const dragIntersection = new THREE.Vector3();
+        const dragOffset = new THREE.Vector3();
+
+        const orbitControls = new THREE.OrbitControls(camera, renderer.domElement);
+        orbitControls.enableDamping = true; orbitControls.dampingFactor = 0.05;
+        orbitControls.maxPolarAngle = Math.PI / 2 + 0.1; 
+        orbitControls.enableZoom = false;
+        
+        // --- 核心优化点 ---
+        orbitControls.enablePan = false; // 禁用平移功能，防止双指误触导致旋转中心偏移，消除“甩尾”和倾斜感
+        orbitControls.minPolarAngle = 0.1; // 防止视角拉到绝对正上方（0度）时产生镜头翻转突变
+
+        const _box1 = new THREE.Box3();
+        const _box2 = new THREE.Box3();
+        const _size = new THREE.Vector3();
+
+        // --- 6. 组合核心算法 ---
+        function areBoxesConnected(b1, b2) {
+            const boxA = new THREE.Box3().setFromObject(b1);
+            const boxB = new THREE.Box3().setFromObject(b2);
+            const eps = 0.5;
+
+            if ((Math.abs(boxA.max.x - boxB.min.x) < eps || Math.abs(boxA.min.x - boxB.max.x) < eps) &&
+                Math.abs(boxA.min.y - boxB.min.y) < eps && Math.abs(boxA.max.y - boxB.max.y) < eps &&
+                Math.abs(boxA.min.z - boxB.min.z) < eps && Math.abs(boxA.max.z - boxB.max.z) < eps) return true;
+
+            if ((Math.abs(boxA.max.y - boxB.min.y) < eps || Math.abs(boxA.min.y - boxB.max.y) < eps) &&
+                Math.abs(boxA.min.x - boxB.min.x) < eps && Math.abs(boxA.max.x - boxB.max.x) < eps &&
+                Math.abs(boxA.min.z - boxB.min.z) < eps && Math.abs(boxA.max.z - boxB.max.z) < eps) return true;
+
+            if ((Math.abs(boxA.max.z - boxB.min.z) < eps || Math.abs(boxA.min.z - boxB.max.z) < eps) &&
+                Math.abs(boxA.min.x - boxB.min.x) < eps && Math.abs(boxA.max.x - boxB.max.x) < eps &&
+                Math.abs(boxA.min.y - boxB.min.y) < eps && Math.abs(boxA.max.y - boxB.max.y) < eps) return true;
+
+            return false;
+        }
+
+        function getConnectedGroup(startBox) {
+            const visited = new Set();
+            const queue = [startBox];
+            visited.add(startBox);
+
+            while (queue.length > 0) {
+                const current = queue.shift();
+                objects.forEach(other => {
+                    if (!visited.has(other) && areBoxesConnected(current, other)) {
+                        visited.add(other); queue.push(other);
+                    }
+                });
+            }
+            return Array.from(visited);
+        }
+
+        // --- 7. 支持组合操作的物理算法 ---
+        function getGroupSnappedPosition(containerObj, rawPos) {
+            const tempPos = containerObj.position.clone();
+            containerObj.position.copy(rawPos);
+            containerObj.updateMatrixWorld(true);
+
+            let bestX = Math.round(rawPos.x * 2) / 2;
+            let bestZ = Math.round(rawPos.z * 2) / 2;
+            let bestY = rawPos.y; 
+
+            let minDistX = 2.5; let minDistZ = 2.5;
+            const children = containerObj.children;
+
+            for (const child of children) {
+                _box1.setFromObject(child);
+                _box1.getSize(_size);
+                
+                for (let i = 0; i < objects.length; i++) {
+                    const other = objects[i];
+                    if (children.includes(other)) continue; 
+                    _box2.setFromObject(other);
+
+                    const overlapZ = _box1.min.z < _box2.max.z + 2 && _box1.max.z > _box2.min.z - 2;
+                    const overlapX = _box1.min.x < _box2.max.x + 2 && _box1.max.x > _box2.min.x - 2;
+
+                    if (overlapZ) {
+                        const candidatesX = [_box2.max.x + _size.x/2, _box2.min.x - _size.x/2, _box2.min.x + _size.x/2, _box2.max.x - _size.x/2];
+                        const b1Center = new THREE.Vector3(); _box1.getCenter(b1Center);
+                        for(let cx of candidatesX) {
+                            if (Math.abs(b1Center.x - cx) < minDistX) {
+                                bestX = cx + (rawPos.x - b1Center.x);
+                                minDistX = Math.abs(b1Center.x - cx);
+                            }
+                        }
+                    }
+                    if (overlapX) {
+                        const candidatesZ = [_box2.max.z + _size.z/2, _box2.min.z - _size.z/2, _box2.min.z + _size.z/2, _box2.max.z - _size.z/2];
+                        const b1Center = new THREE.Vector3(); _box1.getCenter(b1Center);
+                        for(let cz of candidatesZ) {
+                            if (Math.abs(b1Center.z - cz) < minDistZ) {
+                                bestZ = cz + (rawPos.z - b1Center.z);
+                                minDistZ = Math.abs(b1Center.z - cz);
+                            }
+                        }
+                    }
+                }
+            }
+            containerObj.position.copy(tempPos);
+            containerObj.updateMatrixWorld(true);
+            return new THREE.Vector3(bestX, bestY, bestZ);
+        }
+
+        function checkGroupCollision(containerObj, targetPos, targetRot) {
+            const tempPos = containerObj.position.clone();
+            const tempRot = containerObj.rotation.clone();
+            if (targetPos) containerObj.position.copy(targetPos);
+            if (targetRot) containerObj.rotation.copy(targetRot);
+            containerObj.updateMatrixWorld(true);
+
+            let isColliding = false;
+            const children = [...containerObj.children];
+
+            for (const child of children) {
+                _box1.setFromObject(child);
+                _box1.expandByScalar(-0.5);
+
+                if (_box1.min.y < 0) { isColliding = true; break; }
+
+                for (let i = 0; i < objects.length; i++) {
+                    const other = objects[i];
+                    if (children.includes(other)) continue;
+                    _box2.setFromObject(other);
+                    _box2.expandByScalar(-0.5);
+                    if (_box1.intersectsBox(_box2)) { isColliding = true; break; }
+                }
+                if (isColliding) break;
+            }
+            containerObj.position.copy(tempPos); containerObj.rotation.copy(tempRot);
+            containerObj.updateMatrixWorld(true);
+            return isColliding;
+        }
+
+        function calculateGroupGravityY(containerObj, targetX, targetZ) {
+            const tempPos = containerObj.position.clone();
+            containerObj.position.set(targetX, 0, targetZ);
+            containerObj.updateMatrixWorld(true);
+
+            let maxRestingY = 0;
+            const children = containerObj.children;
+
+            for (const child of children) {
+                _box1.setFromObject(child);
+                _box1.getSize(_size);
+
+                const shrink = 0.5;
+                _box1.min.x += shrink; _box1.max.x -= shrink; _box1.min.z += shrink; _box1.max.z -= shrink;
+
+                let childMaxRestingY = 0;
+                for (let i = 0; i < objects.length; i++) {
+                    const other = objects[i];
+                    if (children.includes(other)) continue;
+
+                    _box2.setFromObject(other);
+                    const trueOtherMaxY = _box2.max.y;
+
+                    _box2.min.x += shrink; _box2.max.x -= shrink; _box2.min.z += shrink; _box2.max.z -= shrink;
+
+                    if (_box1.min.x < _box2.max.x && _box1.max.x > _box2.min.x && _box1.min.z < _box2.max.z && _box1.max.z > _box2.min.z) {
+                        if (trueOtherMaxY > childMaxRestingY) childMaxRestingY = trueOtherMaxY;
+                    }
+                }
+                const requiredY = childMaxRestingY - _box1.min.y;
+                if (requiredY > maxRestingY) maxRestingY = requiredY;
+            }
+            containerObj.position.copy(tempPos);
+            containerObj.updateMatrixWorld(true);
+            return maxRestingY;
+        }
+
+        function applyGlobalGravity() {
+            const prevSelected = selectedBox;
+            selectBox(null);
+
+            if (isGroupMode) {
+                const visited = new Set();
+                const components = [];
+                objects.forEach(obj => {
+                    if (!visited.has(obj)) {
+                        const comp = getConnectedGroup(obj);
+                        comp.forEach(c => visited.add(c));
+                        components.push(comp);
+                    }
+                });
+                
+                components.sort((a, b) => Math.min(...a.map(o => o.position.y)) - Math.min(...b.map(o => o.position.y)));
+                components.forEach(comp => {
+                    const tempGroup = new THREE.Group(); scene.add(tempGroup);
+                    comp.forEach(c => tempGroup.attach(c));
+                    tempGroup.position.y = calculateGroupGravityY(tempGroup, tempGroup.position.x, tempGroup.position.z);
+                    tempGroup.updateMatrixWorld(true);
+                    comp.forEach(c => scene.attach(c));
+                    scene.remove(tempGroup);
+                });
+            } else {
+                const sortedObjects = [...objects].sort((a, b) => a.position.y - b.position.y);
+                sortedObjects.forEach(obj => {
+                    const tempGroup = new THREE.Group(); scene.add(tempGroup);
+                    tempGroup.attach(obj);
+                    tempGroup.position.y = calculateGroupGravityY(tempGroup, tempGroup.position.x, tempGroup.position.z);
+                    tempGroup.updateMatrixWorld(true);
+                    scene.attach(obj);
+                    scene.remove(tempGroup);
+                });
+            }
+            if (prevSelected) selectBox(prevSelected);
+            updateHighlights();
+        }
+
+        // --- 数据计算面板逻辑与3D悬浮标签 ---
+        let showTotal = false, showOverlap = false, showDimensions = false;
+        const labelsContainer = document.getElementById('labels-container');
+        const dimLabelsContainer = document.getElementById('dim-labels-container');
+        let groupDataList = [];
+        let dimensionsDataList = [];
+
+        function updateAreaUI() {
+            const btnTotal = document.getElementById('btn-total');
+            const btnOverlap = document.getElementById('btn-overlap');
+            const btnDimensions = document.getElementById('btn-dimensions');
+            
+            btnTotal.className = showTotal 
+                ? "glass-panel p-2 px-4 font-bold text-white transition-all flex justify-center items-center w-36 bg-blue-500/90 border-blue-400 shadow-md scale-105" 
+                : "glass-panel p-2 px-4 font-medium text-slate-500 transition-all flex justify-center items-center w-36 hover:bg-white/60";
+            
+            btnOverlap.className = showOverlap 
+                ? "glass-panel p-2 px-4 font-bold text-white transition-all flex justify-center items-center w-36 bg-orange-500/90 border-orange-400 shadow-md scale-105" 
+                : "glass-panel p-2 px-4 font-medium text-slate-500 transition-all flex justify-center items-center w-36 hover:bg-white/60";
+
+            btnDimensions.className = showDimensions 
+                ? "glass-panel p-2 px-4 font-bold text-[#4A635D] transition-all flex justify-center items-center w-36 bg-[#B5EAD7]/90 border-[#93C9B5] shadow-md scale-105 mt-2" 
+                : "glass-panel p-2 px-4 font-medium text-slate-500 transition-all flex justify-center items-center w-36 hover:bg-white/60 mt-2";
+
+            renderLabels();
+            renderDimLabels();
+        }
+
+        function renderDimLabels() {
+            while (dimLabelsContainer.children.length > dimensionsDataList.length * 3) {
+                dimLabelsContainer.removeChild(dimLabelsContainer.lastChild);
+            }
+            while (dimLabelsContainer.children.length < dimensionsDataList.length * 3) {
+                const elL = document.createElement('div');
+                elL.className = 'absolute transform -translate-x-1/2 -translate-y-1/2 bg-[#B5EAD7]/90 backdrop-blur-sm text-[#4A635D] px-2 py-0.5 rounded shadow-lg text-[12px] font-black border-2 border-[#93C9B5] pointer-events-none transition-opacity duration-150 z-20 tracking-wider hidden';
+                
+                const elW = document.createElement('div');
+                elW.className = 'absolute transform -translate-x-1/2 -translate-y-1/2 bg-[#FFDAC1]/90 backdrop-blur-sm text-[#855B40] px-2 py-0.5 rounded shadow-lg text-[12px] font-black border-2 border-[#E8C2A8] pointer-events-none transition-opacity duration-150 z-20 tracking-wider hidden';
+                
+                const elH = document.createElement('div');
+                elH.className = 'absolute transform -translate-x-1/2 -translate-y-1/2 bg-[#E2CBF0]/90 backdrop-blur-sm text-[#5D4A69] px-2 py-0.5 rounded shadow-lg text-[12px] font-black border-2 border-[#CBB3DA] pointer-events-none transition-opacity duration-150 z-20 tracking-wider hidden';
+
+                dimLabelsContainer.appendChild(elL);
+                dimLabelsContainer.appendChild(elW);
+                dimLabelsContainer.appendChild(elH);
+            }
+
+            for (let i = 0; i < dimensionsDataList.length; i++) {
+                const data = dimensionsDataList[i];
+                const baseIdx = i * 3;
+                const elL = dimLabelsContainer.children[baseIdx];
+                const elW = dimLabelsContainer.children[baseIdx + 1];
+                const elH = dimLabelsContainer.children[baseIdx + 2];
+
+                elL.textContent = `长: ${data.lVal}`; elL.userData = { worldPos: data.lPos }; elL.style.display = showDimensions ? 'block' : 'none';
+                elW.textContent = `宽: ${data.wVal}`; elW.userData = { worldPos: data.wPos }; elW.style.display = showDimensions ? 'block' : 'none';
+                elH.textContent = `高: ${data.hVal}`; elH.userData = { worldPos: data.hPos }; elH.style.display = showDimensions ? 'block' : 'none';
+            }
+            updateDimLabelsPosition();
+        }
+
+        function updateDimLabelsPosition() {
+            if (!showDimensions) return;
+            const children = dimLabelsContainer.children;
+            for (let i = 0; i < children.length; i++) {
+                const el = children[i];
+                if (el.style.display === 'none') continue;
+                const pos = el.userData.worldPos.clone();
+                pos.project(camera);
+
+                if (pos.z > 1) { el.style.opacity = '0'; continue; } else { el.style.opacity = '1'; }
+
+                const x = (pos.x * 0.5 + 0.5) * container.clientWidth;
+                const y = (pos.y * -0.5 + 0.5) * container.clientHeight;
+
+                el.style.left = `${x}px`;
+                el.style.top = `${y}px`;
+            }
+        }
+
+        function renderLabels() {
+            while (labelsContainer.children.length > groupDataList.length) {
+                labelsContainer.removeChild(labelsContainer.lastChild);
+            }
+            while (labelsContainer.children.length < groupDataList.length) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'absolute transform -translate-x-1/2 -translate-y-full flex flex-col gap-2 items-center pointer-events-none transition-opacity duration-150';
+                
+                const elTotal = document.createElement('div');
+                elTotal.className = 'bg-blue-500/90 backdrop-blur-sm text-white px-4 py-2 rounded-xl shadow-xl text-[17px] font-black whitespace-nowrap border-2 border-blue-400 hidden tracking-wider';
+                
+                const elOverlap = document.createElement('div');
+                elOverlap.className = 'bg-orange-500/90 backdrop-blur-sm text-white px-4 py-2 rounded-xl shadow-xl text-[17px] font-black whitespace-nowrap border-2 border-orange-400 hidden tracking-wider';
+
+                wrapper.appendChild(elTotal);
+                wrapper.appendChild(elOverlap);
+                labelsContainer.appendChild(wrapper);
+            }
+
+            for (let i = 0; i < groupDataList.length; i++) {
+                const data = groupDataList[i];
+                const wrapper = labelsContainer.children[i];
+                wrapper.userData = { worldPos: data.worldPos };
+
+                const [elTotal, elOverlap] = wrapper.children;
+                elTotal.textContent = `总表面积: ${data.total}`; elTotal.style.display = showTotal ? 'block' : 'none';
+                elOverlap.textContent = `重合面积: ${data.overlap}`; elOverlap.style.display = showOverlap ? 'block' : 'none';
+            }
+            updateLabelsPosition();
+        }
+
+        function updateLabelsPosition() {
+            const children = labelsContainer.children;
+            for (let i = 0; i < children.length; i++) {
+                const el = children[i];
+                const pos = el.userData.worldPos.clone();
+                pos.project(camera); 
+
+                if (pos.z > 1) { el.style.opacity = '0'; continue; } else { el.style.opacity = '1'; }
+
+                const x = (pos.x * 0.5 + 0.5) * container.clientWidth;
+                const y = (pos.y * -0.5 + 0.5) * container.clientHeight - 20;
+
+                el.style.left = `${x}px`;
+                el.style.top = `${y}px`;
+            }
+        }
+
+        function calculateGroupsData() {
+            const visited = new Set();
+            const components = [];
+            objects.forEach(obj => {
+                if (!visited.has(obj)) {
+                    const comp = getConnectedGroup(obj);
+                    comp.forEach(c => visited.add(c));
+                    components.push(comp);
+                }
+            });
+
+            const paramL = parseFloat(document.getElementById('size-l').value);
+            const paramW = parseFloat(document.getElementById('size-w').value);
+            const paramH = parseFloat(document.getElementById('size-h').value);
+            const singleBoxArea = 2 * (paramL * paramW + paramL * paramH + paramW * paramH);
+            const eps = 0.5;
+
+            groupDataList = [];
+            dimensionsDataList = [];
+
+            components.forEach(comp => {
+                let overlapArea = 0;
+                
+                for (let i = 0; i < comp.length; i++) {
+                    for (let j = i + 1; j < comp.length; j++) {
+                        const b1 = comp[i]; const b2 = comp[j];
+                        _box1.setFromObject(b1); _box2.setFromObject(b2);
+
+                        let matchX = false;
+                        if (Math.abs(_box1.max.x - _box2.min.x) < eps || Math.abs(_box1.min.x - _box2.max.x) < eps) matchX = true;
+                        if (matchX && Math.abs(_box1.min.y - _box2.min.y) < eps && Math.abs(_box1.max.y - _box2.max.y) < eps && Math.abs(_box1.min.z - _box2.min.z) < eps && Math.abs(_box1.max.z - _box2.max.z) < eps) {
+                            overlapArea += 2 * (paramW * paramH); continue;
+                        }
+
+                        let matchY = false;
+                        if (Math.abs(_box1.max.y - _box2.min.y) < eps || Math.abs(_box1.min.y - _box2.max.y) < eps) matchY = true;
+                        if (matchY && Math.abs(_box1.min.x - _box2.min.x) < eps && Math.abs(_box1.max.x - _box2.max.x) < eps && Math.abs(_box1.min.z - _box2.min.z) < eps && Math.abs(_box1.max.z - _box2.max.z) < eps) {
+                            overlapArea += 2 * (paramL * paramW); continue;
+                        }
+
+                        let matchZ = false;
+                        if (Math.abs(_box1.max.z - _box2.min.z) < eps || Math.abs(_box1.min.z - _box2.max.z) < eps) matchZ = true;
+                        if (matchZ && Math.abs(_box1.min.x - _box2.min.x) < eps && Math.abs(_box1.max.x - _box2.max.x) < eps && Math.abs(_box1.min.y - _box2.min.y) < eps && Math.abs(_box1.max.y - _box2.max.y) < eps) {
+                            overlapArea += 2 * (paramL * paramH);
+                        }
+                    }
+                }
+
+                const totalArea = comp.length * singleBoxArea;
+
+                const groupBox = new THREE.Box3();
+                comp.forEach(b => {
+                    const b3 = new THREE.Box3().setFromObject(b);
+                    groupBox.union(b3);
+                });
+                const center = new THREE.Vector3();
+                groupBox.getCenter(center);
+                center.y = groupBox.max.y + 1.5; 
+
+                groupDataList.push({ total: totalArea, overlap: overlapArea, worldPos: center });
+
+                let targetBox = comp[0];
+                let targetWorldPos = new THREE.Vector3();
+                targetBox.getWorldPosition(targetWorldPos);
+
+                for(let i=1; i<comp.length; i++) {
+                    let b = comp[i];
+                    let bWorldPos = new THREE.Vector3();
+                    b.getWorldPosition(bWorldPos);
+
+                    if (bWorldPos.y < targetWorldPos.y - 0.1) {
+                        targetBox = b; targetWorldPos.copy(bWorldPos);
+                    } else if (Math.abs(bWorldPos.y - targetWorldPos.y) <= 0.1) {
+                        if (bWorldPos.z > targetWorldPos.z) {
+                            targetBox = b; targetWorldPos.copy(bWorldPos);
+                        }
+                    }
+                }
+                
+                targetBox.updateMatrixWorld(true);
+                
+                const lLocal = new THREE.Vector3(0, -paramH/2 - 0.8, paramW/2 + 0.8);
+                const wLocal = new THREE.Vector3(paramL/2 + 0.8, -paramH/2 - 0.8, 0);
+                const hLocal = new THREE.Vector3(paramL/2 + 0.8, 0, paramW/2 + 0.8);
+
+                dimensionsDataList.push({
+                    lPos: lLocal.applyMatrix4(targetBox.matrixWorld), wPos: wLocal.applyMatrix4(targetBox.matrixWorld), hPos: hLocal.applyMatrix4(targetBox.matrixWorld),
+                    lVal: paramL, wVal: paramW, hVal: paramH
+                });
+            });
+
+            renderLabels();
+            renderDimLabels();
+        }
+
+        const highlightPool = []; let highlightCount = 0;
+        const highlightGeom = new THREE.PlaneGeometry(1, 1); 
+        const highlightMatX = new THREE.MeshBasicMaterial({ color: 0xFF0000, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+        const highlightMatY = new THREE.MeshBasicMaterial({ color: 0x0088FF, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+        const highlightMatZ = new THREE.MeshBasicMaterial({ color: 0xFF9900, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+
+        function getHighlightMesh(mat) {
+            if (highlightCount < highlightPool.length) {
+                const mesh = highlightPool[highlightCount]; mesh.material = mat; mesh.visible = true; highlightCount++; return mesh;
+            }
+            const mesh = new THREE.Mesh(highlightGeom, mat); scene.add(mesh); highlightPool.push(mesh); highlightCount++; return mesh;
+        }
+
+        function updateHighlights() {
+            highlightCount = 0; highlightPool.forEach(mesh => { mesh.visible = false; });
+            const eps = 0.5; 
+
+            for (let i = 0; i < objects.length; i++) {
+                for (let j = i + 1; j < objects.length; j++) {
+                    const b1 = objects[i]; const b2 = objects[j];
+                    _box1.setFromObject(b1); _box2.setFromObject(b2);
+
+                    let matchX = false, xPos = 0;
+                    if (Math.abs(_box1.max.x - _box2.min.x) < eps) { matchX = true; xPos = (_box1.max.x + _box2.min.x) / 2; }
+                    else if (Math.abs(_box1.min.x - _box2.max.x) < eps) { matchX = true; xPos = (_box1.min.x + _box2.max.x) / 2; }
+
+                    if (matchX && Math.abs(_box1.min.y - _box2.min.y) < eps && Math.abs(_box1.max.y - _box2.max.y) < eps && Math.abs(_box1.min.z - _box2.min.z) < eps && Math.abs(_box1.max.z - _box2.max.z) < eps) {
+                        const mesh = getHighlightMesh(highlightMatX);
+                        mesh.scale.set(_box1.max.z - _box1.min.z, _box1.max.y - _box1.min.y, 1);
+                        mesh.position.set(xPos, (_box1.min.y + _box1.max.y)/2, (_box1.min.z + _box1.max.z)/2);
+                        mesh.rotation.set(0, Math.PI / 2, 0); continue; 
+                    }
+
+                    let matchY = false, yPos = 0;
+                    if (Math.abs(_box1.max.y - _box2.min.y) < eps) { matchY = true; yPos = (_box1.max.y + _box2.min.y) / 2; }
+                    else if (Math.abs(_box1.min.y - _box2.max.y) < eps) { matchY = true; yPos = (_box1.min.y + _box2.max.y) / 2; }
+
+                    if (matchY && Math.abs(_box1.min.x - _box2.min.x) < eps && Math.abs(_box1.max.x - _box2.max.x) < eps && Math.abs(_box1.min.z - _box2.min.z) < eps && Math.abs(_box1.max.z - _box2.max.z) < eps) {
+                        const mesh = getHighlightMesh(highlightMatY);
+                        mesh.scale.set(_box1.max.x - _box1.min.x, _box1.max.z - _box1.min.z, 1);
+                        mesh.position.set((_box1.min.x + _box1.max.x)/2, yPos, (_box1.min.z + _box1.max.z)/2);
+                        mesh.rotation.set(Math.PI / 2, 0, 0); continue;
+                    }
+
+                    let matchZ = false, zPos = 0;
+                    if (Math.abs(_box1.max.z - _box2.min.z) < eps) { matchZ = true; zPos = (_box1.max.z + _box2.min.z) / 2; }
+                    else if (Math.abs(_box1.min.z - _box2.max.z) < eps) { matchZ = true; zPos = (_box1.min.z + _box2.max.z) / 2; }
+
+                    if (matchZ && Math.abs(_box1.min.x - _box2.min.x) < eps && Math.abs(_box1.max.x - _box2.max.x) < eps && Math.abs(_box1.min.y - _box2.min.y) < eps && Math.abs(_box1.max.y - _box2.max.y) < eps) {
+                        const mesh = getHighlightMesh(highlightMatZ);
+                        mesh.scale.set(_box1.max.x - _box1.min.x, _box1.max.y - _box1.min.y, 1);
+                        mesh.position.set((_box1.min.x + _box1.max.x)/2, (_box1.min.y + _box1.max.y)/2, zPos);
+                        mesh.rotation.set(0, 0, 0);
+                    }
+                }
+            }
+            calculateGroupsData();
+        }
+
+        // 纯黑色实线边框，粗细增强至 8
+        let selectedBox = null;
+        const defaultEdgeColor = 0x000000; 
+        const selectedEdgeColor = 0x3b82f6;
+        const edgesMaterial = new THREE.LineBasicMaterial({ color: defaultEdgeColor, linewidth: 8, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+
+        function createBox(x = 0, y = null, z = 0) { 
+            if (y === null) { y = parseFloat(document.getElementById('size-h').value) / 2; }
+            const mesh = new THREE.Mesh(currentGeom, materials);
+            mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true;
+            
+            const line = new THREE.LineSegments(new THREE.EdgesGeometry(currentGeom), edgesMaterial.clone());
+            mesh.add(line); mesh.userData.outline = line;
+
+            scene.add(mesh); objects.push(mesh); boxCount++;
+            selectBox(mesh);
+            return mesh;
+        }
+
+        function selectBox(mesh) {
+            while(groupContainer.children.length > 0) { scene.attach(groupContainer.children[0]); }
+            objects.forEach(obj => { if (obj.userData.outline) obj.userData.outline.material.color.setHex(defaultEdgeColor); });
+
+            if (mesh) {
+                selectedBox = mesh;
+                const activeGroup = isGroupMode ? getConnectedGroup(mesh) : [mesh];
+                activeGroup.forEach(obj => { if (obj.userData.outline) obj.userData.outline.material.color.setHex(selectedEdgeColor); });
+
+                groupContainer.position.copy(mesh.position);
+                groupContainer.rotation.copy(mesh.rotation);
+                groupContainer.scale.copy(mesh.scale);
+                groupContainer.updateMatrixWorld();
+                activeGroup.forEach(obj => groupContainer.attach(obj));
+            } else {
+                selectedBox = null;
+            }
+        }
+
+        createBox();
+
+        // --- 8. UI 控制与事件 ---
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        let isDrawModeActive = false;
+
+        // 加强对各种 touch / mouse 事件兼容的获取方法
+        function getClientPos(event) {
+            if (event.changedTouches && event.changedTouches.length > 0) {
+                return { x: event.changedTouches[0].clientX, y: event.changedTouches[0].clientY };
+            }
+            return { x: event.clientX, y: event.clientY };
+        }
+
+        container.addEventListener('pointerdown', (event) => { 
+            if (isDrawModeActive) return; 
+            const pos = getClientPos(event);
+            const rect = container.getBoundingClientRect();
+            pointer.x = ((pos.x - rect.left) / rect.width) * 2 - 1; 
+            pointer.y = -((pos.y - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(pointer, camera);
+
+            const intersects = raycaster.intersectObjects(objects, false);
+            if (intersects.length > 0) {
+                selectBox(intersects[0].object);
+                isDragging = true; 
+                orbitControls.enabled = false; container.style.cursor = 'grabbing';
+                planeNormal.set(0, 1, 0); dragPlane.setFromNormalAndCoplanarPoint(planeNormal, groupContainer.position);
+                if (raycaster.ray.intersectPlane(dragPlane, dragIntersection)) { dragOffset.copy(groupContainer.position).sub(dragIntersection); } 
+                else dragOffset.set(0, 0, 0);
+            } else selectBox(null);
+        });
+
+        window.addEventListener('pointermove', (event) => {
+            if (isDrawModeActive || !isDragging || !selectedBox) return;
+            const pos = getClientPos(event);
+            const rect = container.getBoundingClientRect();
+            pointer.x = ((pos.x - rect.left) / rect.width) * 2 - 1; 
+            pointer.y = -((pos.y - rect.top) / rect.height) * 2 + 1;
+            
+            raycaster.setFromCamera(pointer, camera);
+            if (raycaster.ray.intersectPlane(dragPlane, dragIntersection)) {
+                const rawPos = dragIntersection.clone().add(dragOffset);
+                const snappedPos = getGroupSnappedPosition(groupContainer, rawPos);
+                snappedPos.y = calculateGroupGravityY(groupContainer, snappedPos.x, snappedPos.z);
+                
+                if (!checkGroupCollision(groupContainer, snappedPos, null)) {
+                    groupContainer.position.copy(snappedPos);
+                    groupContainer.updateMatrixWorld(true);
+                    updateHighlights();
+                }
+            }
+        });
+
+        window.addEventListener('pointerup', () => {
+            if (isDrawModeActive) return;
+            if (isDragging) { isDragging = false; orbitControls.enabled = true; container.style.cursor = 'default'; }
+        });
+
+        document.getElementById('add-btn').addEventListener('click', () => {
+            selectBox(null); 
+            let newBox = createBox(); 
+            newBox.position.y = calculateGroupGravityY(groupContainer, 0, 0);
+            newBox.updateMatrixWorld(true);
+            updateHighlights();
+        });
+
+        document.getElementById('delete-btn').addEventListener('click', () => {
+            if (selectedBox) {
+                const boxesToDelete = isGroupMode ? getConnectedGroup(selectedBox) : [selectedBox];
+                selectBox(null);
+                boxesToDelete.forEach(obj => {
+                    scene.remove(obj);
+                    const index = objects.indexOf(obj);
+                    if (index > -1) objects.splice(index, 1);
+                    if (obj.userData.outline) { obj.userData.outline.geometry.dispose(); obj.userData.outline.material.dispose(); }
+                });
+                applyGlobalGravity();
+            }
+        });
+
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            selectBox(null);
+            objects.forEach(obj => {
+                scene.remove(obj);
+                if (obj.userData.outline) { obj.userData.outline.geometry.dispose(); obj.userData.outline.material.dispose(); }
+            });
+            objects.length = 0; boxCount = 0;
+            updateHighlights();
+        });
+
+        document.getElementById('group-toggle').addEventListener('change', (e) => {
+            isGroupMode = e.target.checked;
+            if (selectedBox) selectBox(null); 
+        });
+
+        // --- 全新点击旋转逻辑 ---
+        let lastValidRotation = new THREE.Euler();
+        let lastValidPosition = new THREE.Vector3();
+
+        function rotateGroupInstantly(axis, angle) {
+            if (!selectedBox) return;
+            lastValidRotation.copy(groupContainer.rotation);
+            lastValidPosition.copy(groupContainer.position);
+            
+            if (axis === 'x') groupContainer.rotation.x += angle;
+            if (axis === 'y') groupContainer.rotation.y += angle;
+            
+            groupContainer.updateMatrixWorld(true);
+
+            if (checkGroupCollision(groupContainer, null, null)) {
+                // 如果穿模，弹回原状
+                groupContainer.rotation.copy(lastValidRotation);
+                groupContainer.position.copy(lastValidPosition);
+                groupContainer.updateMatrixWorld(true);
+            } else {
+                // 如果未穿模，更新高度并重绘
+                groupContainer.position.y = calculateGroupGravityY(groupContainer, groupContainer.position.x, groupContainer.position.z);
+                groupContainer.updateMatrixWorld(true);
+                updateHighlights();
+            }
+        }
+
+        document.getElementById('rotate-y-btn').addEventListener('click', () => { rotateGroupInstantly('y', Math.PI / 2); });
+        document.getElementById('rotate-x-btn').addEventListener('click', () => { rotateGroupInstantly('x', Math.PI / 2); });
+
+        document.getElementById('zoom-slider').addEventListener('input', (e) => { camera.zoom = parseFloat(e.target.value); camera.updateProjectionMatrix(); });
+        document.getElementById('btn-total').addEventListener('click', () => { showTotal = !showTotal; updateAreaUI(); });
+        document.getElementById('btn-overlap').addEventListener('click', () => { showOverlap = !showOverlap; updateAreaUI(); });
+        document.getElementById('btn-dimensions').addEventListener('click', () => { showDimensions = !showDimensions; updateAreaUI(); });
+
+        const sizeL = document.getElementById('size-l'), sizeW = document.getElementById('size-w'), sizeH = document.getElementById('size-h');
+        const opacitySlider = document.getElementById('opacity-slider');
+        const valL = document.getElementById('val-l'), valW = document.getElementById('val-w'), valH = document.getElementById('val-h'), valO = document.getElementById('val-o');
+
+        function updateBoxesGeometry() {
+            const l = parseFloat(sizeL.value), w = parseFloat(sizeW.value), h = parseFloat(sizeH.value);
+            const newGeom = new THREE.BoxGeometry(l, h, w); const newEdges = new THREE.EdgesGeometry(newGeom);
+            objects.forEach(mesh => {
+                mesh.geometry.dispose(); mesh.geometry = newGeom;
+                mesh.userData.outline.geometry.dispose(); mesh.userData.outline.geometry = newEdges;
+            });
+            if (currentGeom) currentGeom.dispose(); currentGeom = newGeom;
+            applyGlobalGravity();
+        }
+
+        sizeL.addEventListener('input', (e) => { valL.textContent = e.target.value; updateBoxesGeometry(); });
+        sizeW.addEventListener('input', (e) => { valW.textContent = e.target.value; updateBoxesGeometry(); });
+        sizeH.addEventListener('input', (e) => { valH.textContent = e.target.value; updateBoxesGeometry(); });
+        opacitySlider.addEventListener('input', (e) => {
+            valO.textContent = e.target.value + '%'; materials.forEach(mat => mat.opacity = parseFloat(e.target.value) / 100);
+        });
+
+        // --- 9. 左侧悬浮：2D屏幕批注涂鸦与橡皮擦逻辑 ---
+        const annoCanvas = document.getElementById('annotation-canvas');
+        const ctx = annoCanvas.getContext('2d');
+        let isDrawingAnno = false, strokes = [], currentStroke = null;
+        let currentAnnoColor = '#FF0000', currentAnnoWidth = 5, isEraserMode = false;
+
+        function resizeAnnoCanvas() {
+            const rect = container.getBoundingClientRect();
+            annoCanvas.width = rect.width * window.devicePixelRatio; 
+            annoCanvas.height = rect.height * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            redrawStrokes(); 
+        }
+        setTimeout(resizeAnnoCanvas, 100); 
+
+        function redrawStrokes() {
+            const rect = container.getBoundingClientRect();
+            ctx.clearRect(0, 0, rect.width, rect.height);
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.shadowColor = 'rgba(255, 255, 255, 0.8)'; ctx.shadowBlur = 4;
+            
+            strokes.forEach(stroke => {
+                if(stroke.points.length === 0) return;
+                
+                if (stroke.isEraser) {
+                    ctx.globalCompositeOperation = 'destination-out';
+                    ctx.strokeStyle = 'rgba(0,0,0,1)';
+                    ctx.lineWidth = stroke.width * 4; 
+                } else {
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.strokeStyle = stroke.color;
+                    ctx.lineWidth = stroke.width;
+                }
+
+                ctx.beginPath(); ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+                for(let i = 1; i < stroke.points.length; i++) ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+                ctx.stroke();
+            });
+            ctx.globalCompositeOperation = 'source-over'; 
+        }
+
+        annoCanvas.addEventListener('pointerdown', (e) => {
+            if (!isDrawModeActive) return;
+            isDrawingAnno = true; const rect = annoCanvas.getBoundingClientRect();
+            const pos = getClientPos(e);
+            currentStroke = { color: currentAnnoColor, width: currentAnnoWidth, isEraser: isEraserMode, points: [{x: pos.x - rect.left, y: pos.y - rect.top}] };
+            strokes.push(currentStroke);
+        });
+
+        annoCanvas.addEventListener('pointermove', (e) => {
+            if (!isDrawingAnno || !isDrawModeActive) return;
+            const rect = annoCanvas.getBoundingClientRect();
+            const pos = getClientPos(e);
+            currentStroke.points.push({x: pos.x - rect.left, y: pos.y - rect.top});
+            redrawStrokes();
+        });
+
+        window.addEventListener('pointerup', () => { isDrawingAnno = false; });
+        annoCanvas.addEventListener('pointerout', () => { isDrawingAnno = false; });
+
+        const toggleDrawBtn = document.getElementById('toggle-draw-btn');
+        const annoToolsPanel = document.getElementById('anno-tools-panel');
+        
+        toggleDrawBtn.addEventListener('click', () => {
+            isDrawModeActive = !isDrawModeActive;
+            if (isDrawModeActive) {
+                toggleDrawBtn.innerHTML = '✅'; 
+                toggleDrawBtn.classList.add('bg-[#B5EAD7]', 'text-white');
+                annoToolsPanel.classList.remove('hidden');
+                setTimeout(() => { annoToolsPanel.classList.remove('opacity-0', '-translate-y-4'); }, 10);
+                
+                annoCanvas.classList.remove('pointer-events-none'); annoCanvas.classList.add('pointer-events-auto');
+                annoCanvas.style.cursor = 'crosshair';
+                orbitControls.enabled = false; selectBox(null); 
+            } else {
+                toggleDrawBtn.innerHTML = '🖌️'; 
+                toggleDrawBtn.classList.remove('bg-[#B5EAD7]', 'text-white');
+                annoToolsPanel.classList.add('opacity-0', '-translate-y-4');
+                setTimeout(() => { annoToolsPanel.classList.add('hidden'); }, 300);
+                
+                annoCanvas.classList.remove('pointer-events-auto'); annoCanvas.classList.add('pointer-events-none');
+                orbitControls.enabled = true;
+            }
+        });
+
+        document.querySelectorAll('.tool-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                isEraserMode = false;
+                document.getElementById('eraser-btn').classList.remove('border-slate-400', 'bg-white/90');
+                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active', 'border-slate-400'));
+                e.target.classList.add('active'); 
+                currentAnnoColor = e.target.dataset.color;
+            });
+        });
+
+        document.querySelectorAll('.width-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.width-btn').forEach(b => {
+                    b.classList.remove('active', 'bg-white/60', 'shadow-sm');
+                    b.classList.add('hover:bg-white/50');
+                });
+                e.currentTarget.classList.add('active', 'bg-white/60', 'shadow-sm');
+                e.currentTarget.classList.remove('hover:bg-white/50');
+                currentAnnoWidth = parseInt(e.currentTarget.dataset.width);
+            });
+        });
+
+        document.getElementById('eraser-btn').addEventListener('click', (e) => {
+            isEraserMode = true;
+            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+            e.currentTarget.classList.add('border-slate-400', 'bg-white/90');
+        });
+
+        document.getElementById('undo-draw-btn').addEventListener('click', () => { if (strokes.length > 0) { strokes.pop(); redrawStrokes(); } });
+        document.getElementById('clear-draw-btn').addEventListener('click', () => { strokes = []; redrawStrokes(); });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            resizeAnnoCanvas();
+        });
+
+        // --- 10. 渲染循环 ---
+        function animate() {
+            requestAnimationFrame(animate);
+            orbitControls.update();
+            updateLabelsPosition(); 
+            updateDimLabelsPosition();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+    </script>
+</body>
+</html>
